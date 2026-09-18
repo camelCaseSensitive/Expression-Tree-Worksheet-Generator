@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Expression Tree Puzzle Generator</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=STIX+Two+Math&display=swap');
+  :root{--bg:#f4f5f7;--panel:#fff;--ink:#17191c;--muted:#6f7680;--line:#3f4349;--border:#d8dce2;--accent:#2f6fed;--danger:#b42318}
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg)}
+  .app{min-height:100vh;display:grid;grid-template-columns:390px 1fr}.controls{padding:22px;background:var(--panel);border-right:1px solid var(--border);overflow:auto}
+  h1{font-size:22px;margin:0 0 7px}.sub{font-size:13px;line-height:1.45;color:var(--muted);margin-bottom:18px}label{display:block;font-weight:700;font-size:13px;margin:14px 0 7px}
+  textarea{width:100%;min-height:105px;resize:vertical;padding:12px;border:1px solid var(--border);border-radius:10px;font:15px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;outline:none}
+  textarea:focus,input:focus{border-color:var(--accent);box-shadow:0 0 0 3px #2f6fed20}.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  button{border:1px solid var(--border);background:#fff;padding:9px 11px;border-radius:9px;font-weight:700;cursor:pointer}button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}button:hover{filter:brightness(.98)}button:disabled{opacity:.45;cursor:not-allowed}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end}.mini label{margin-top:10px}input[type=number]{width:100%;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font:14px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}input[type=range]{width:100%}
+  .difficulty-line{display:flex;align-items:center;justify-content:space-between;gap:12px}.difficulty-badge{font-size:12px;font-weight:800;padding:4px 8px;border:1px solid var(--border);border-radius:999px;white-space:nowrap}.hint{font-size:12px;line-height:1.4;color:var(--muted);margin-top:5px}
+  .check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-top:10px}.check input{width:16px;height:16px}.error{margin-top:12px;color:var(--danger);font-size:13px;line-height:1.4;min-height:18px;white-space:pre-wrap}.status{margin-top:10px;font-size:12px;line-height:1.4;color:#46515f}.normalized{margin-top:12px;padding:10px;border-radius:9px;background:#f7f8fa;border:1px solid var(--border);font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#525963;overflow-wrap:anywhere}hr{border:0;border-top:1px solid var(--border);margin:18px 0}
+  .canvas-wrap{min-width:0;min-height:100vh;padding:20px;display:flex}.stage{position:relative;flex:1;min-height:600px;background:white;border:1px solid var(--border);border-radius:14px;overflow:hidden}svg{width:100%;height:100%;display:block}
+  .edge{stroke:var(--line);stroke-width:2.5;fill:none}.node circle{fill:#fff;stroke:var(--line);stroke-width:2.5}.node text{font-family:"STIX Two Math","Cambria Math","Latin Modern Math","STIXGeneral","Times New Roman",serif;font-size:23px;dominant-baseline:middle;text-anchor:middle;fill:#111;user-select:none}.op-node text{font-weight:800;stroke:#111;stroke-width:.5px;paint-order:stroke fill}.atom-node text{font-weight:500}.variable-node text{font-style:italic}.blank-node circle{stroke-width:3px}.blank-node text{font-family:Inter,ui-sans-serif,system-ui,sans-serif;font-weight:800;font-size:20px}.result-node circle{stroke-width:3px}.result-node text{font-weight:700;font-size:22px}
+  .equation-display{position:absolute;top:14px;left:70px;right:190px;min-height:54px;display:none;align-items:center;justify-content:center;z-index:2;pointer-events:none;color:#111;overflow:visible}
+  .equation-display .katex-display{margin:0}
+  .equation-display .katex{font-size:2em}
+  .toolbar{position:absolute;right:12px;top:12px;display:flex;gap:7px;z-index:3}.toolbar button{background:#ffffffee;backdrop-filter:blur(6px)}
+  @media (max-width:900px){.app{grid-template-columns:1fr}.controls{border-right:0;border-bottom:1px solid var(--border)}.stage{min-height:540px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="controls">
+    <h1>Expression Tree Puzzle Generator</h1>
+    <div class="sub">Type ordinary math or paste Desmos-style LaTeX. Use it as a normal expression tree, or turn a numeric expression into a missing-number puzzle.</div>
+
+    <label for="expr">Expression</label>
+    <textarea id="expr" spellcheck="false">(3*4)+2</textarea>
+    <div class="row">
+      <button id="drawBtn">Draw tree</button>
+      <button class="primary" id="puzzleBtn">Make puzzle from input</button>
+    </div>
+
+    <hr>
+    <div class="difficulty-line">
+      <label for="difficulty" style="margin:0">Random expression difficulty</label>
+      <span class="difficulty-badge" id="difficultyBadge">3 · Medium</span>
+    </div>
+    <input id="difficulty" type="range" min="1" max="5" value="3" step="1">
+    <div class="hint" id="difficultyHint"></div>
+
+    <div class="grid2">
+      <div class="mini"><label for="minNum">Smallest number</label><input id="minNum" type="number" value="1" min="-20" max="50"></div>
+      <div class="mini"><label for="maxNum">Largest number</label><input id="maxNum" type="number" value="9" min="-20" max="50"></div>
+    </div>
+    <div class="grid2">
+      <div class="mini"><label for="blankCount">Missing numbers</label><input id="blankCount" type="number" value="2" min="1" max="4"></div>
+      <div class="mini"><label>&nbsp;</label><button class="primary" id="randomBtn" style="width:100%">Randomize equation</button></div>
+    </div>
+    <div class="hint">Random puzzles use whole-number leaves and try to choose blanks so there is exactly one solution within the number range above.</div>
+
+    <hr>
+    <label>Display</label>
+    <div class="check"><input type="checkbox" id="puzzleMode" checked><span>Puzzle mode</span></div>
+    <div class="check"><input type="checkbox" id="showAnswer" checked><span>Show the answer at the top</span></div>
+    <div class="check"><input type="checkbox" id="showEquation"><span>Show equation</span></div>
+    <div class="check"><input type="checkbox" id="revealBlanks"><span>Reveal missing numbers</span></div>
+    <div class="check"><input type="checkbox" id="implicitTimes" checked><span>Show multiplication as ×</span></div>
+    <div class="check"><input type="checkbox" id="tightTree"><span>Compact vertical spacing</span></div>
+
+    <div class="error" id="error"></div>
+    <div class="status" id="status"></div>
+    <div class="normalized" id="normalized"></div>
+  </aside>
+
+  <main class="canvas-wrap">
+    <div class="stage">
+      <div class="equation-display" id="equationDisplay"></div>
+      <div class="toolbar"><button id="svgBtn">Save SVG</button><button id="pngBtn">Save PNG</button></div>
+      <svg id="tree" xmlns="http://www.w3.org/2000/svg" aria-label="Expression tree"></svg>
+    </div>
+  </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script>
+const exprEl=document.getElementById('expr'),svg=document.getElementById('tree'),errorEl=document.getElementById('error'),statusEl=document.getElementById('status'),normalizedEl=document.getElementById('normalized');
+const puzzleModeEl=document.getElementById('puzzleMode'),showAnswerEl=document.getElementById('showAnswer'),showEquationEl=document.getElementById('showEquation'),revealBlanksEl=document.getElementById('revealBlanks'),implicitTimesEl=document.getElementById('implicitTimes'),tightTreeEl=document.getElementById('tightTree');const equationDisplayEl=document.getElementById('equationDisplay');
+const difficultyEl=document.getElementById('difficulty'),difficultyBadgeEl=document.getElementById('difficultyBadge'),difficultyHintEl=document.getElementById('difficultyHint'),minNumEl=document.getElementById('minNum'),maxNumEl=document.getElementById('maxNum'),blankCountEl=document.getElementById('blankCount');
+let puzzleState={hiddenLeafIds:new Set(),target:null,solutionCount:null};
+function clearPuzzleState(){puzzleState.hiddenLeafIds=new Set();puzzleState.target=null;puzzleState.solutionCount=null;revealBlanksEl.checked=false}
+function readGroup(s,i,open='{',close='}'){if(s[i]!==open)throw new Error(`Expected ${open}`);let depth=0;for(let j=i;j<s.length;j++){if(s[j]===open)depth++;else if(s[j]===close){depth--;if(depth===0)return{content:s.slice(i+1,j),end:j+1}}}throw new Error(`Unclosed ${open}`)}
+function latexToPlain(input){let s=input.trim().replace(/\u2212/g,'-').replace(/\u00d7/g,'*').replace(/\u00f7/g,'/').replace(/\\left/g,'').replace(/\\right/g,'').replace(/\\cdot|\\times/g,'*').replace(/\\div/g,'/').replace(/\\,/g,'').replace(/\\!/g,'').replace(/\\;/g,'').replace(/\\:/g,'').replace(/\\ /g,' ');function expandFrac(str){let out='';for(let i=0;i<str.length;){if(str.startsWith('\\frac',i)){i+=5;while(/\s/.test(str[i]||''))i++;const a=readGroup(str,i);i=a.end;while(/\s/.test(str[i]||''))i++;const b=readGroup(str,i);i=b.end;out+='(('+expandFrac(a.content)+')/('+expandFrac(b.content)+'))'}else if(str.startsWith('\\sqrt',i)){i+=5;while(/\s/.test(str[i]||''))i++;const g=readGroup(str,i);i=g.end;out+='sqrt('+expandFrac(g.content)+')'}else out+=str[i++]}return out}s=expandFrac(s);let prev;do{prev=s;s=s.replace(/\^\{([^{}]+)\}/g,'^($1)')}while(s!==prev);s=s.replace(/\{/g,'(').replace(/\}/g,')');s=s.replace(/\\operatorname\s*\(([^)]*)\)/g,'$1');s=s.replace(/\\(sin|cos|tan|ln|log|abs)\b/g,'$1');return s}
+function tokenize(s){const raw=[];let i=0;while(i<s.length){const c=s[i];if(/\s/.test(c)){i++;continue}if(/[0-9.]/.test(c)){let j=i+1;while(j<s.length&&/[0-9.]/.test(s[j]))j++;const text=s.slice(i,j);if((text.match(/\./g)||[]).length>1)throw new Error(`Invalid number: ${text}`);raw.push({type:'atom',value:text});i=j;continue}if(/[A-Za-z_]/.test(c)){let j=i+1;while(j<s.length&&/[A-Za-z0-9_]/.test(s[j]))j++;raw.push({type:'atom',value:s.slice(i,j),ident:true});i=j;continue}if('+-*/^()'.includes(c)){raw.push({type:c,value:c});i++;continue}throw new Error(`I don't recognize "${c}" at position ${i+1}`)}const functions=new Set(['sin','cos','tan','sqrt','ln','log','abs']),out=[],canEnd=t=>t&&(t.type==='atom'||t.type===')'),canStart=t=>t&&(t.type==='atom'||t.type==='(');for(let k=0;k<raw.length;k++){const a=raw[k],b=raw[k+1];out.push(a);if(canEnd(a)&&canStart(b)){const functionCall=a.type==='atom'&&a.ident&&functions.has(a.value)&&b.type==='(';if(!functionCall)out.push({type:'*',value:'*',implicit:true})}}out.push({type:'EOF',value:''});return out}
+function parse(input){const plain=latexToPlain(input),tokens=tokenize(plain);let p=0;const peek=()=>tokens[p],take=t=>{if(peek().type!==t)throw new Error(`Expected "${t}" but found "${peek().value||'end of expression'}"`);return tokens[p++]};function node(op,children,extra={}){return{kind:'op',op,children,...extra}}function atom(v){return{kind:'atom',value:v,children:[]}}function parseAdd(){let left=parseMul();while(peek().type==='+'||peek().type==='-'){const op=take(peek().type).type;left=node(op,[left,parseMul()])}return left}function parseMul(){let left=parseUnary();while(peek().type==='*'||peek().type==='/'){const tok=take(peek().type);left=node(tok.type,[left,parseUnary()],{implicit:!!tok.implicit})}return left}function parseUnary(){if(peek().type==='+'){take('+');return parseUnary()}if(peek().type==='-'){take('-');return node('neg',[parseUnary()])}return parsePower()}function parsePower(){let left=parsePrimary();if(peek().type==='^'){take('^');left=node('^',[left,parseUnary()])}return left}function parsePrimary(){if(peek().type==='atom'){const t=take('atom'),funcs=new Set(['sin','cos','tan','sqrt','ln','log','abs']);if(t.ident&&funcs.has(t.value)&&peek().type==='('){take('(');const arg=parseAdd();take(')');return node(t.value,[arg])}return atom(t.value)}if(peek().type==='('){take('(');const x=parseAdd();take(')');return x}throw new Error(`Expected a number, variable, or "(" but found "${peek().value||'end of expression'}"`)}const tree=parseAdd();if(peek().type!=='EOF')throw new Error(`Unexpected "${peek().value}"`);annotateLeaves(tree);return{tree,plain}}
+function annotateLeaves(tree){let i=0;(function walk(n){if(n.kind==='atom'){n.leafId=i++;return}n.children.forEach(walk)})(tree)}
+function evaluateTree(n,overrides=null){if(n.kind==='atom'){if(overrides&&overrides.has(n.leafId))return overrides.get(n.leafId);const v=Number(n.value);return Number.isFinite(v)?v:NaN}const a=n.children[0]?evaluateTree(n.children[0],overrides):NaN,b=n.children[1]?evaluateTree(n.children[1],overrides):NaN;switch(n.op){case '+':return a+b;case '-':return a-b;case '*':return a*b;case '/':return b===0?NaN:a/b;case '^':return Math.pow(a,b);case 'neg':return-a;case 'sqrt':return a<0?NaN:Math.sqrt(a);case 'sin':return Math.sin(a);case 'cos':return Math.cos(a);case 'tan':return Math.tan(a);case 'ln':return a<=0?NaN:Math.log(a);case 'log':return a<=0?NaN:Math.log10(a);case 'abs':return Math.abs(a);default:return NaN}}
+function valuesMatch(a,b){return Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<1e-9}
+function collectLeaves(tree){const arr=[];(function walk(n){if(n.kind==='atom')arr.push(n);else n.children.forEach(walk)})(tree);return arr}
+function chooseCombinations(arr,k){const out=[];(function rec(start,combo){if(combo.length===k){out.push(combo.slice());return}for(let i=start;i<=arr.length-(k-combo.length);i++){combo.push(arr[i]);rec(i+1,combo);combo.pop()}})(0,[]);return out}
+function shuffle(a){const x=a.slice();for(let i=x.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[x[i],x[j]]=[x[j],x[i]]}return x}
+function countSolutions(tree,hiddenIds,minVal,maxVal,target,stopAt=2){const overrides=new Map();let count=0;function rec(i){if(count>=stopAt)return;if(i===hiddenIds.length){const v=evaluateTree(tree,overrides);if(valuesMatch(v,target))count++;return}for(let n=minVal;n<=maxVal;n++){overrides.set(hiddenIds[i],n);rec(i+1);if(count>=stopAt)return}}rec(0);return count}
+function makePuzzleFromCurrent(){errorEl.textContent='';statusEl.textContent='';try{const{tree}=parse(exprEl.value),target=evaluateTree(tree);if(!Number.isFinite(target))throw new Error('Puzzle mode needs an expression made only from numbers.');const minVal=Math.ceil(Number(minNumEl.value)),maxVal=Math.floor(Number(maxNumEl.value));if(!Number.isFinite(minVal)||!Number.isFinite(maxVal)||minVal>maxVal)throw new Error('Check the puzzle number range.');const leaves=collectLeaves(tree),candidates=leaves.filter(n=>{const v=Number(n.value);return Number.isInteger(v)&&v>=minVal&&v<=maxVal});if(candidates.length===0)throw new Error(`There are no whole-number leaves between ${minVal} and ${maxVal} that can be hidden.`);let desired=Math.max(1,Math.min(4,Math.floor(Number(blankCountEl.value)||1),candidates.length)),found=null,usedCount=desired;while(usedCount>=1&&!found){let combos=shuffle(chooseCombinations(candidates,usedCount)).slice(0,120);for(const combo of combos){const ids=combo.map(n=>n.leafId),solutions=countSolutions(tree,ids,minVal,maxVal,target,2);if(solutions===1){found=ids;break}}if(!found)usedCount--}if(!found)throw new Error('I could not find a uniquely solvable set of blanks for this expression and number range.');puzzleState.hiddenLeafIds=new Set(found);puzzleState.target=target;puzzleState.solutionCount=1;puzzleModeEl.checked=true;revealBlanksEl.checked=false;statusEl.textContent=usedCount<desired?`This expression was not uniquely solvable with ${desired} blanks, so I used ${usedCount} instead.`:`Puzzle created with ${usedCount} missing number${usedCount===1?'':'s'} and one solution in the range ${minVal}–${maxVal}.`;render()}catch(err){errorEl.textContent=err.message}}
+
+function treeToLatex(n,parentPrec=0){
+  const hidden=puzzleModeEl.checked&&n.kind==='atom'&&puzzleState.hiddenLeafIds.has(n.leafId)&&!revealBlanksEl.checked;
+  if(n.kind==='atom'){
+    if(hidden)return '\\boxed{\\phantom{8}}';
+    if(/^[A-Za-z]\d+$/.test(n.value)){
+      const m=n.value.match(/^([A-Za-z])(\d+)$/);
+      return `${m[1]}_{${m[2]}}`;
+    }
+    return n.value;
+  }
+  const prec={'+':1,'-':1,'*':2,'/':2,'neg':3,'^':4}[n.op]??5;
+  const wrap=s=>`\\left(${s}\\right)`;
+  let out='';
+  if(n.op==='+'){
+    out=`${treeToLatex(n.children[0],prec)}+${treeToLatex(n.children[1],prec)}`;
+  }else if(n.op==='-'){
+    const a=treeToLatex(n.children[0],prec);
+    let b=treeToLatex(n.children[1],prec);
+    if(n.children[1].kind==='op'&&['+','-'].includes(n.children[1].op))b=wrap(b);
+    out=`${a}-${b}`;
+  }else if(n.op==='*'){
+    let a=treeToLatex(n.children[0],prec),b=treeToLatex(n.children[1],prec);
+    if(n.children[0].kind==='op'&&['+','-'].includes(n.children[0].op))a=wrap(a);
+    if(n.children[1].kind==='op'&&['+','-'].includes(n.children[1].op))b=wrap(b);
+    out=`${a}\\cdot ${b}`;
+  }else if(n.op==='/'){
+    out=`\\frac{${treeToLatex(n.children[0],0)}}{${treeToLatex(n.children[1],0)}}`;
+  }else if(n.op==='^'){
+    let a=treeToLatex(n.children[0],prec);
+    if(n.children[0].kind==='op')a=wrap(a);
+    out=`${a}^{${treeToLatex(n.children[1],0)}}`;
+  }else if(n.op==='neg'){
+    let a=treeToLatex(n.children[0],prec);
+    if(n.children[0].kind==='op'&&['+','-'].includes(n.children[0].op))a=wrap(a);
+    out=`-${a}`;
+  }else if(n.op==='sqrt'){
+    out=`\\sqrt{${treeToLatex(n.children[0],0)}}`;
+  }else if(n.op==='abs'){
+    out=`\\left|${treeToLatex(n.children[0],0)}\\right|`;
+  }else if(['sin','cos','tan','ln','log'].includes(n.op)){
+    out=`\\${n.op}\\left(${treeToLatex(n.children[0],0)}\\right)`;
+  }else out=n.op;
+  return prec<parentPrec?wrap(out):out;
+}
+function renderEquation(tree,numericTarget){
+  if(!showEquationEl.checked){
+    equationDisplayEl.style.display='none';
+    equationDisplayEl.innerHTML='';
+    return;
+  }
+  equationDisplayEl.style.display='flex';
+  let latex=treeToLatex(tree);
+  if(puzzleModeEl.checked&&showAnswerEl.checked&&Number.isFinite(numericTarget)){
+    const target=puzzleState.target!==null?puzzleState.target:numericTarget;
+    const t=Number.isInteger(target)?String(target):String(Number(target.toFixed(4)));
+    latex+=`=${t}`;
+  }
+  if(window.katex){
+    katex.render(latex,equationDisplayEl,{throwOnError:false,displayMode:true,strict:false});
+  }else equationDisplayEl.textContent=latex;
+}
+
+function labelFor(n){if(n.kind==='atom')return n.value;if(n.op==='*')return implicitTimesEl.checked?'×':'·';if(n.op==='/')return'÷';if(n.op==='-')return'−';if(n.op==='neg')return'−';if(n.op==='^')return'^';return n.op}
+function layoutTree(root,topRows=0){let leafIndex=0,maxDepth=0;(function place(n,depth){maxDepth=Math.max(maxDepth,depth);n.depth=depth;if(!n.children.length)n.x=leafIndex++;else{n.children.forEach(c=>place(c,depth+1));n.x=n.children.reduce((a,c)=>a+c.x,0)/n.children.length}})(root,0);const leaves=Math.max(leafIndex,1),xGap=110,yGap=tightTreeEl.checked?88:116,marginX=70,marginY=70,topOffset=Math.max(0,topRows)*yGap,width=Math.max(390,marginX*2+Math.max(1,leaves-1)*xGap),height=Math.max(340,marginY*2+topOffset+maxDepth*yGap);(function map(n){n.px=leaves===1?width/2:marginX+n.x*xGap;n.py=marginY+topOffset+n.depth*yGap;n.children.forEach(map)})(root);return{width,height,yGap,marginY}}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function render(){errorEl.textContent='';try{const{tree,plain}=parse(exprEl.value);normalizedEl.textContent='Parsed as: '+plain;const numericTarget=evaluateTree(tree),showPuzzle=puzzleModeEl.checked&&Number.isFinite(numericTarget),showResult=showPuzzle&&showAnswerEl.checked,showEq=showEquationEl.checked,topRows=(showEq?1:0)+(showResult?1:0),{width,height,marginY,yGap}=layoutTree(tree,topRows);renderEquation(tree,numericTarget);svg.setAttribute('viewBox',`0 0 ${width} ${height}`);const r=29;let edges='',nodes='';function walk(n){for(const c of n.children){const dx=c.px-n.px,dy=c.py-n.py,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len;edges+=`<line class="edge" x1="${n.px+ux*r}" y1="${n.py+uy*r}" x2="${c.px-ux*r}" y2="${c.py-uy*r}"/>`;walk(c)}let label=labelFor(n);const hidden=showPuzzle&&n.kind==='atom'&&puzzleState.hiddenLeafIds.has(n.leafId)&&!revealBlanksEl.checked;if(hidden)label='?';const isVariable=n.kind==='atom'&&/^[A-Za-z][A-Za-z0-9_]*$/.test(n.value);let nodeClass=hidden?'node blank-node':n.kind==='atom'?`node atom-node${isVariable?' variable-node':''}`:'node op-node';const size=label.length>6?15:label.length>4?17:label.length>2?20:23;nodes+=`<g class="${nodeClass}"><circle cx="${n.px}" cy="${n.py}" r="${r}"/><text x="${n.px}" y="${n.py+1}" style="font-size:${size}px">${esc(label)}</text></g>`}walk(tree);if(showResult){const target=puzzleState.target!==null?puzzleState.target:numericTarget,resultX=tree.px,resultY=marginY+(showEq?yGap:0),dx=tree.px-resultX,dy=tree.py-resultY,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len;edges+=`<line class="edge" x1="${resultX+ux*r}" y1="${resultY+uy*r}" x2="${tree.px-ux*r}" y2="${tree.py-uy*r}"/>`;let resultLabel=Number.isInteger(target)?String(target):String(Number(target.toFixed(4))),size=resultLabel.length>6?15:resultLabel.length>4?17:22;nodes+=`<g class="node result-node"><circle cx="${resultX}" cy="${resultY}" r="${r}"/><text x="${resultX}" y="${resultY+1}" style="font-size:${size}px">${esc(resultLabel)}</text></g>`}svg.innerHTML=edges+nodes;if(showPuzzle&&puzzleState.hiddenLeafIds.size===0)statusEl.textContent='Puzzle mode is on. Click “Make puzzle from input” to choose uniquely solvable blanks.'}catch(err){svg.innerHTML='';equationDisplayEl.innerHTML='';equationDisplayEl.style.display='none';normalizedEl.textContent='';errorEl.textContent=err.message}}
+const difficultyInfo={1:{name:'Very easy',ops:2,blanks:1,hint:'2 operations • addition, subtraction, and multiplication'},2:{name:'Easy',ops:3,blanks:1,hint:'3 operations • a little more nesting'},3:{name:'Medium',ops:4,blanks:2,hint:'4 operations • division can appear'},4:{name:'Hard',ops:5,blanks:2,hint:'5 operations • deeper trees and more division'},5:{name:'Challenge',ops:6,blanks:3,hint:'6 operations • deeper structure and more missing numbers'}};
+function updateDifficulty(){const d=Number(difficultyEl.value),info=difficultyInfo[d];difficultyBadgeEl.textContent=`${d} · ${info.name}`;difficultyHintEl.textContent=info.hint;blankCountEl.value=info.blanks}
+function rndInt(a,b){return Math.floor(Math.random()*(b-a+1))+a}function randomChoice(a){return a[Math.floor(Math.random()*a.length)]}
+function astValue(n){if(n.kind==='leaf')return n.value;const a=astValue(n.left),b=astValue(n.right);if(n.op==='+')return a+b;if(n.op==='-')return a-b;if(n.op==='*')return a*b;if(n.op==='/')return b===0?NaN:a/b;return NaN}
+function astToString(n){return n.kind==='leaf'?String(n.value):`(${astToString(n.left)} ${n.op} ${astToString(n.right)})`}
+function makeRandomAst(difficulty,minVal,maxVal){const info=difficultyInfo[difficulty],leafCount=info.ops+1,maxAbs=[40,70,120,220,350][difficulty-1];for(let wholeAttempt=0;wholeAttempt<250;wholeAttempt++){let nodes=[];for(let i=0;i<leafCount;i++)nodes.push({kind:'leaf',value:rndInt(minVal,maxVal)});let valid=true;while(nodes.length>1){const ia=rndInt(0,nodes.length-1),a=nodes.splice(ia,1)[0],ib=rndInt(0,nodes.length-1),b=nodes.splice(ib,1)[0],av=astValue(a),bv=astValue(b);let allowed=difficulty<=2?['+','-','*']:['+','-','*','/'],made=null;for(let attempt=0;attempt<35;attempt++){let op=randomChoice(allowed),left=a,right=b,lv=av,rv=bv;if(op==='-'){if(lv===rv)continue;if(lv<rv){[left,right]=[right,left];[lv,rv]=[rv,lv]}}if(op==='/'){if(rv===0||!Number.isInteger(lv/rv)||lv/rv<=0){if(lv!==0&&Number.isInteger(rv/lv)&&rv/lv>0){[left,right]=[right,left];[lv,rv]=[rv,lv]}else continue}}const cand={kind:'op',op,left,right},v=astValue(cand);if(!Number.isFinite(v)||!Number.isInteger(v)||Math.abs(v)>maxAbs||v<0)continue;made=cand;break}if(!made){valid=false;break}nodes.push(made)}if(valid&&nodes.length===1){const finalVal=astValue(nodes[0]);if(Number.isFinite(finalVal)&&Number.isInteger(finalVal)&&Math.abs(finalVal)<=maxAbs)return nodes[0]}}throw new Error('Could not build a random expression with those settings. Try a wider positive number range.')}
+function randomizeExpression(){errorEl.textContent='';statusEl.textContent='';clearPuzzleState();try{const minVal=Math.ceil(Number(minNumEl.value)),maxVal=Math.floor(Number(maxNumEl.value));if(!Number.isFinite(minVal)||!Number.isFinite(maxVal)||minVal>maxVal)throw new Error('Check the random number range.');if(minVal<0)throw new Error('For the random generator, use a nonnegative minimum. You can still type negative-number expressions manually.');const d=Number(difficultyEl.value),ast=makeRandomAst(d,minVal,maxVal);exprEl.value=astToString(ast);render();if(puzzleModeEl.checked)makePuzzleFromCurrent()}catch(err){errorEl.textContent=err.message}}
+function downloadText(filename,text,type='image/svg+xml'){const blob=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+function exportSvgText(){const clone=svg.cloneNode(true),css=`.edge{stroke:#3f4349;stroke-width:2.5;fill:none}.node circle{fill:#fff;stroke:#3f4349;stroke-width:2.5}.node text{font-family:"STIX Two Math","Cambria Math","Times New Roman",serif;dominant-baseline:middle;text-anchor:middle;fill:#111}.op-node text{font-weight:800;stroke:#111;stroke-width:.5px;paint-order:stroke fill}.atom-node text{font-weight:500}.variable-node text{font-style:italic}.blank-node circle{stroke-width:3px}.blank-node text{font-family:Arial,sans-serif;font-weight:800}.result-node circle{stroke-width:3px}.result-node text{font-weight:700}`;const style=document.createElementNS('http://www.w3.org/2000/svg','style');style.textContent=css;clone.insertBefore(style,clone.firstChild);const vb=svg.viewBox.baseVal;clone.setAttribute('width',vb.width);clone.setAttribute('height',vb.height);return new XMLSerializer().serializeToString(clone)}
+document.getElementById('drawBtn').onclick=()=>{clearPuzzleState();render()};document.getElementById('puzzleBtn').onclick=makePuzzleFromCurrent;document.getElementById('randomBtn').onclick=randomizeExpression;difficultyEl.addEventListener('input',updateDifficulty);[puzzleModeEl,showAnswerEl,showEquationEl,revealBlanksEl,implicitTimesEl,tightTreeEl].forEach(el=>el.addEventListener('change',render));let timer;exprEl.addEventListener('input',()=>{clearTimeout(timer);clearPuzzleState();timer=setTimeout(render,180)});
+document.getElementById('svgBtn').onclick=()=>{if(svg.innerHTML)downloadText('expression-tree-puzzle.svg',exportSvgText())};document.getElementById('pngBtn').onclick=()=>{if(!svg.innerHTML)return;const vb=svg.viewBox.baseVal,data='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(exportSvgText()),img=new Image();img.onload=()=>{const scale=2,canvas=document.createElement('canvas');canvas.width=vb.width*scale;canvas.height=vb.height*scale;const ctx=canvas.getContext('2d');ctx.scale(scale,scale);ctx.fillStyle='white';ctx.fillRect(0,0,vb.width,vb.height);ctx.drawImage(img,0,0);const a=document.createElement('a');a.download='expression-tree-puzzle.png';a.href=canvas.toDataURL('image/png');a.click()};img.src=data};
+updateDifficulty();render();
+</script>
+</body>
+</html>
